@@ -12,9 +12,21 @@
   "app": {
     "windows": [
       {
-        "title": "deskflow",
-        "width": 800,
-        "height": 600
+        "label": "main",
+        "title": "DeskFlow",
+        "acceptFirstMouse": false,
+        "width": 400,
+        "height": 300,
+        "transparent": true,
+        "decorations": false,
+        "resizable": false,
+        "fullscreen": false,
+        "visible": true,
+        "skipTaskbar": true,
+        "alwaysOnTop": false,
+        "focus": false,
+        "visibleOnAllWorkspaces": false,
+        "theme": "Light"
       }
     ],
     "security": {
