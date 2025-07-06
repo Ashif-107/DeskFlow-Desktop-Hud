@@ -94,10 +94,10 @@ fn make_window_desktop_hud(window: &WebviewWindow) {
 use windows::{
     core::PCWSTR,
      Win32::{
-        Foundation::{HWND, MAX_PATH},
+        Foundation::{HWND, MAX_PATH, LPARAM},
         System::{
             ProcessStatus::K32GetModuleBaseNameW,
-            Threading::{OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ},
+            Threading::{OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ, PROCESS_QUERY_LIMITED_INFORMATION},
         },
         UI::WindowsAndMessaging::*,
     },
@@ -142,6 +142,87 @@ fn get_active_app() -> Option<(String, String)> {
 
 
 
+#[cfg(target_os = "windows")]
+#[tauri::command]
+fn get_all_visible_windows() -> Vec<(String, String)> {
+    let mut windows_info: Vec<(String, String)> = Vec::new();
+
+        use windows::Win32::Foundation::BOOL; 
+
+    unsafe extern "system" fn enum_window_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
+        let windows_info = &mut *(lparam.0 as *mut Vec<(String, String)>);
+
+        // Skip invisible or empty title windows
+        if !IsWindowVisible(hwnd).as_bool() || GetWindowTextLengthW(hwnd) == 0 {
+            return  true.into();
+        }
+
+        // Get window title
+        let mut title = [0u16; 512];
+        let len = GetWindowTextW(hwnd, &mut title);
+        let title = String::from_utf16_lossy(&title[..len as usize]);
+
+        // Skip system/UI windows
+        let skip_titles = ["Program Manager", "Settings", "Windows Input Experience"];
+        if skip_titles.iter().any(|t| title.contains(t)) {
+            return true.into();
+        }
+
+        // Get process ID
+        let mut pid = 0;
+        GetWindowThreadProcessId(hwnd, Some(&mut pid));
+
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ, false, pid);
+        let exe_name = if let Ok(process) = handle {
+            let mut name = [0u16; 260];
+            let len = K32GetModuleBaseNameW(process, None, &mut name);
+
+            if len > 0 {
+                String::from_utf16_lossy(&name[..len as usize])
+            } else {
+                // Fallback for UWP apps
+                use windows::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_VM_READ, QueryFullProcessImageNameW, PROCESS_NAME_FORMAT};
+                use windows::core::PWSTR;
+
+                let mut full = [0u16; 260];
+                let mut size = full.len() as u32;
+
+                if QueryFullProcessImageNameW(process, PROCESS_NAME_FORMAT(0), PWSTR(full.as_mut_ptr()), &mut size).is_ok() {
+                    String::from_utf16_lossy(&full[..size as usize])
+                        .split('\\')
+                        .last()
+                        .unwrap_or("<unknown>")
+                        .to_string()
+                } else {
+                    "<unknown>".to_string()
+                }
+            }
+        } else {
+            "<access denied>".to_string()
+        };
+
+        // Filter system/UWP background processes
+        let skip_exe = [
+            "SystemSettings.exe", "StartMenuExperienceHost.exe",
+            "ShellExperienceHost.exe", "ApplicationFrameHost.exe",
+            "TextInputHost.exe", "SearchApp.exe"
+        ];
+
+        if skip_exe.iter().any(|p| exe_name.eq_ignore_ascii_case(p)) {
+            return true.into();
+        }
+
+        windows_info.push((title, exe_name));
+        true.into()
+ 
+    }
+
+    unsafe {
+        EnumWindows(Some(enum_window_proc), LPARAM(&mut windows_info as *mut _ as isize));
+    }
+
+    windows_info
+}
 
 
 
@@ -169,7 +250,8 @@ fn main() {
         })
         .invoke_handler(generate_handler![
                     init_position,
-                    get_active_app
+                    get_active_app,
+                    get_all_visible_windows
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
