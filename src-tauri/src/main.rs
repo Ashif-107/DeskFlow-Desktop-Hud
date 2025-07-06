@@ -89,6 +89,75 @@ fn make_window_desktop_hud(window: &WebviewWindow) {
     }
 }
 
+
+#[cfg(target_os = "windows")]
+use windows::{
+    core::PCWSTR,
+     Win32::{
+        Foundation::{HWND, MAX_PATH},
+        System::{
+            ProcessStatus::K32GetModuleBaseNameW,
+            Threading::{OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ},
+        },
+        UI::WindowsAndMessaging::*,
+    },
+};
+
+#[cfg(target_os = "windows")]
+fn get_active_window_info() -> Option<(String, String)> {
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd.0 == 0 {
+            return None;
+        }
+
+        // Get window title
+        let mut title = [0u16; 512];
+        let len = GetWindowTextW(hwnd, &mut title);
+        let title = String::from_utf16_lossy(&title[..len as usize]);
+
+        // Get process ID
+        let mut pid = 0;
+        GetWindowThreadProcessId(hwnd, Some(&mut pid));
+
+        // Open the process
+        let process = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, pid).ok()?;
+
+        // Get the executable name
+        let mut name = [0u16; MAX_PATH as usize];
+        let len = K32GetModuleBaseNameW(process, None, &mut name) as usize;
+        let process_name = String::from_utf16_lossy(&name[..len]);
+
+        Some((title, process_name))
+    }
+}
+
+
+#[tauri::command]
+fn get_active_app() -> Option<(String, String)> {
+    get_active_window_info()
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
@@ -98,7 +167,12 @@ fn main() {
             make_window_desktop_hud(&window);
             Ok(())
         })
-        .invoke_handler(generate_handler![init_position])
+        .invoke_handler(generate_handler![
+                    init_position,
+                    get_active_app
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+
+        
 }
