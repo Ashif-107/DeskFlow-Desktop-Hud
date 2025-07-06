@@ -10,9 +10,9 @@ function App() {
 
 
   return (
-    <div className="App">
+    <div className="app-container">
       <header className="App-header">
-        <h1 className="App-title">Welcome to My React App</h1>
+        <h1 className="App-title">DeskFlow 🏎️</h1>
         <p>This is a simple React application.</p>
       </header>
     </div>
