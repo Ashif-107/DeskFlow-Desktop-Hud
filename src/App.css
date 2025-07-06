@@ -5,20 +5,29 @@ body,
   padding: 0;
   width: 100%;
   height: 100%;
-  background: rgba(30, 30, 30, 0.3); /* semi-transparent dark */
-  backdrop-filter: blur(10px); /* blur the background */
-  -webkit-backdrop-filter: blur(10px); /* Safari support */
+  background: rgba(30, 30, 30, 0.3);
+  /* semi-transparent dark */
+  backdrop-filter: blur(10px);
+  /* blur the background */
+  -webkit-backdrop-filter: blur(10px);
+  /* Safari support */
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
   font-family: 'Segoe UI', sans-serif;
+  
+}
+
+body::-webkit-scrollbar {
+  display: none;
 }
 
 .app-container {
   width: 100%;
   height: 100%;
-  background: #0000005b; /* match with body */
+  background: #0000005b;
+  /* match with body */
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border-radius: 12px;
@@ -30,11 +39,12 @@ body,
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background-color: rgba(0, 0, 0, 0.5); /* semi-transparent black */
+  background-color: rgba(0, 0, 0, 0.5);
+  /* semi-transparent black */
   box-shadow: 0 0 10px rgba(0, 0, 0, 1);
 }
 
-.App-title{
+.App-title {
   font-size: 2rem;
   color: #ffffff;
   margin: 5px;
@@ -50,20 +60,41 @@ body,
 }
 
 .active-window-info {
-  font-size: 0.8rem;
+  width: 100%;
+  font-size: 0.7rem;
   color: #ffffff;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .visible-windows {
   display: flex;
-  font-size: 0.7rem;
+  font-size: 1rem;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   color: #ffffff;
 }
 
-.visible-windows h3{
+.visible-windows h3 {
   margin-bottom: -7px;
   color: #ffffff;
+}
+
+.show-all-btn {
+  width: 100%;
+  outline: 0;
+  border: 0;
+  cursor: pointer;
+  background: transparent;
+  border-radius: 8px;
+
+}
+
+.view-icon {
+  width: 30px;
+  height: 30px;
+  padding: 5px 10px;
 }
