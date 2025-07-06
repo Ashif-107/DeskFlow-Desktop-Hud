@@ -32,13 +32,14 @@ function App() {
     <div className="app-container">
       <header className="App-header">
         <h1 className="App-title">DeskFlow 🏎️</h1>
-
-        {/* ✅ Add this part to show active window info */}
-        <div style={{ marginTop: "1rem", fontSize: "0.9rem" }}>
+      </header>
+      <div className="App-content">
+          {/* ✅ Add this part to show active window info */}
+        <div className="active-window-info">
           <strong>🪟 Active Window:</strong> {activeApp.title}<br />
           <strong>📦 Process:</strong> {activeApp.process}
         </div>
-      </header>
+      </div>
     </div>
   );
 }
