@@ -299,13 +299,7 @@ fn guess_category(title: &str, process: &str) -> String {
     } else if lowered.contains("game") {
         "Gaming".to_string()
     } else if lowered.contains("whatsapp") || lowered.contains("discord") || lowered.contains("teams") || lowered.contains("telegram") {
-        "Communication".to_string()
-    } else if lowered.contains("settings") || lowered.contains("control panel") {
-        "System".to_string()
-    } else if lowered.contains("explorer") || lowered.contains("file explorer") {
-        "File Management".to_string()
-    } else if lowered.contains("terminal") || lowered.contains("command prompt") {
-        "Development".to_string()
+        "Chatting".to_string()
     } else {
         "Other".to_string()
     }
@@ -368,6 +362,47 @@ fn get_running_processes() -> Vec<String> {
 
     processes
 }
+
+#[tauri::command]
+fn get_category_summary() -> Result<HashMap<String, u64>, String> {
+    use std::fs::File;
+    use std::io::{BufReader, BufRead};
+
+    let file_path = if cfg!(target_os = "windows") {
+        std::env::var("APPDATA").unwrap_or_else(|_| ".".to_string()) + "/deskflow/sessions.json"
+    } else {
+        std::env::var("HOME").unwrap_or_else(|_| ".".to_string()) + "/.deskflow/sessions.json"
+    };
+
+    let file = File::open(file_path).map_err(|e| e.to_string())?;
+    let reader = BufReader::new(file);
+
+    let mut summary: HashMap<String, u64> = HashMap::new();
+
+    for line in reader.lines() {
+        if let Ok(json) = line {
+            if let Ok(session) = serde_json::from_str::<AppSession>(&json) {
+                let duration = session.end_time.saturating_sub(session.start_time);
+                *summary.entry(session.category.clone()).or_insert(0) += duration;
+            }
+        }
+    }
+
+    Ok(summary)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -432,7 +467,9 @@ fn main() {
                     init_position,
                     get_active_app,
                     get_all_visible_windows,
-                    get_running_processes
+                    get_running_processes,
+                    get_category_summary
+
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
