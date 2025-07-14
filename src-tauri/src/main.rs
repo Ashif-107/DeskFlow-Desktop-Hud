@@ -225,17 +225,149 @@ fn get_all_visible_windows() -> Vec<(String, String)> {
 }
 
 
+//----- To Track the time period -------//
+
+use serde::{Serialize, Deserialize};
+use std::fs::{OpenOptions};
+use std::io::{BufReader, BufWriter};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use tokio::sync::Mutex;
+use once_cell::sync::Lazy;
+
+static LAST_APP: Lazy<Mutex<Option<(String, String, u64)>>> = Lazy::new(|| Mutex::new(None));
 
 
+#[derive(Serialize, Deserialize, Debug)]
+struct AppSession {
+    app_name: String,
+    window_title: String,
+    category: String,
+    start_time: u64,
+    end_time: u64,
+}
+
+use std::collections::HashMap;
+
+#[derive(Clone)]
+struct RunningApp {
+    start_time: u64,
+    last_seen: u64,
+}
+
+static RUNNING_APPS: Lazy<Mutex<HashMap<(String, String), RunningApp>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+
+fn save_session(session: &AppSession) {
+   // Save to a system-appropriate directory instead of project root
+    let file_path = if cfg!(target_os = "windows") {
+        std::env::var("APPDATA").unwrap_or_else(|_| ".".to_string()) + "/deskflow/sessions.json"
+    } else {
+        std::env::var("HOME").unwrap_or_else(|_| ".".to_string()) + "/.deskflow/sessions.json"
+    };
+    
+    // Create directory if it doesn't exist
+    if let Some(parent) = std::path::Path::new(&file_path).parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+    
+    let file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(file_path);
+
+    if let Ok(mut file) = file {
+        let json = serde_json::to_string(session).unwrap();
+        use std::io::Write;
+        writeln!(file, "{}", json).unwrap();
+    }
+}
 
 
+fn guess_category(title: &str, process: &str) -> String {
+    let lowered = format!("{} {}", title.to_lowercase(), process.to_lowercase());
 
+    if lowered.contains("spotify") {
+        "Music".to_string()
+    } else if lowered.contains("vscode") || lowered.contains("code") {
+        "Work".to_string()
+    } else if lowered.contains("chrome") || lowered.contains("brave") {
+        if lowered.contains("youtube") || lowered.contains("netflix") {
+            "Entertainment".to_string()
+        } else {
+            "Browsing".to_string()
+        }
+    } else if lowered.contains("game") {
+        "Gaming".to_string()
+    } else if lowered.contains("whatsapp") || lowered.contains("discord") || lowered.contains("teams") || lowered.contains("telegram") {
+        "Communication".to_string()
+    } else if lowered.contains("settings") || lowered.contains("control panel") {
+        "System".to_string()
+    } else if lowered.contains("explorer") || lowered.contains("file explorer") {
+        "File Management".to_string()
+    } else if lowered.contains("terminal") || lowered.contains("command prompt") {
+        "Development".to_string()
+    } else {
+        "Other".to_string()
+    }
+}
 
+#[cfg(target_os = "windows")]
+#[tauri::command]
+fn get_running_processes() -> Vec<String> {
+    use windows::{
+        Win32::{
+            System::Diagnostics::ToolHelp::{
+                CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+                TH32CS_SNAPPROCESS,
+            },
+            Foundation::HANDLE,
+        },
+    };
 
+    let mut processes = Vec::new();
 
+    unsafe {
+        let snapshot: HANDLE = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0).unwrap();
 
+        if snapshot.0 == -1 {
+            return processes; // failed to get snapshot
+        }
 
+        let mut entry = PROCESSENTRY32W {
+            dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
+            ..Default::default()
+        };
 
+        if Process32FirstW(snapshot, &mut entry).is_ok() {
+            loop {
+                let len = entry.szExeFile.iter().position(|&c| c == 0).unwrap_or(entry.szExeFile.len());
+                let name = String::from_utf16_lossy(&entry.szExeFile[..len]);
+
+                // Optional: Filter out system processes
+                let skip = [
+                    "svchost.exe",
+                    "System Idle Process",
+                    "System",
+                    "winlogon.exe",
+                    "csrss.exe",
+                    "smss.exe",
+                    "Registry",
+                    "Idle",
+                ];
+
+                if !skip.iter().any(|&s| s.eq_ignore_ascii_case(&name)) {
+                    processes.push(name.clone());
+                }
+
+                if !Process32NextW(snapshot, &mut entry).is_err() {
+                    break;
+                }
+            }
+        }
+    }
+
+    processes
+}
 
 
 
@@ -246,12 +378,61 @@ fn main() {
                 .get_webview_window("main")
                 .expect("`main` window not found");
             make_window_desktop_hud(&window);
+
+                let app_handle = app.handle();
+    tauri::async_runtime::spawn(async move {
+        use tokio::time::{sleep, Duration};
+        loop {
+                let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+
+        let visible_windows = get_all_visible_windows();
+
+        let mut apps = RUNNING_APPS.lock().await;
+
+        // Track seen this tick
+        let mut seen_now = HashMap::new();
+
+        for (title, process) in visible_windows {
+            seen_now.insert((title.clone(), process.clone()), true);
+
+            apps.entry((title.clone(), process.clone()))
+                .and_modify(|entry| {
+                    entry.last_seen = now;
+                })
+                .or_insert(RunningApp {
+                    start_time: now,
+                    last_seen: now,
+                });
+        }
+
+        // Clean up apps that disappeared
+        apps.retain(|(title, process), app| {
+            if app.last_seen < now {
+                let session = AppSession {
+                    app_name: process.clone(),
+                    window_title: title.clone(),
+                    category: guess_category(title, process),
+                    start_time: app.start_time,
+                    end_time: app.last_seen,
+                };
+                save_session(&session);
+                false // remove from map
+            } else {
+                true
+            }
+        });
+
+        sleep(Duration::from_secs(1)).await;
+             }
+            });
+
             Ok(())
         })
         .invoke_handler(generate_handler![
                     init_position,
                     get_active_app,
-                    get_all_visible_windows
+                    get_all_visible_windows,
+                    get_running_processes
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
