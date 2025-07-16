@@ -23,6 +23,15 @@ const CATEGORY_COLORS: Record<string, string> = {
   'Chatting': '#0066CC',
 };
 
+const productiveCategories = [
+  "Development",
+  "Education",
+  "Work",
+  "Writing",
+  "Research",
+  "Tools",
+  "Design"
+];
 
 function formatDuration(seconds: number) {
   const hrs = Math.floor(seconds / 3600);
@@ -80,32 +89,32 @@ function App() {
       }
     }, 10000);
 
-    // Every 30 sec: fetch productivity score
-    const scoreInterval = setInterval(async () => {
-      try {
-        const [_, percent, rating] = await invoke<[any, number, string]>("calculate_productivity_score");
-        setScore({ percent, rating });
-      } catch (err) {
-        console.error("Failed to fetch productivity score", err);
-      }
-    }, 5000); // every 5 seconds
-
-    // initial score fetch
-    (async () => {
-      try {
-        const [_, percent, rating] = await invoke<[any, number, string]>("calculate_productivity_score");
-        setScore({ percent, rating });
-      } catch (err) {
-        console.error("Initial productivity score failed", err);
-      }
-    })();
-
     return () => {
       clearInterval(interval);
       clearInterval(summaryInterval);
-      clearInterval(scoreInterval);
+
     };
   }, [])
+
+  // Every 30 sec: fetch productivity score
+  useEffect(() => {
+    const totalTime = Object.values(categorySummary).reduce((a, b) => a + b, 0);
+
+    const productiveTime = Object.entries(categorySummary)
+      .filter(([category]) => productiveCategories.includes(category))
+      .reduce((sum, [_, time]) => sum + time, 0);
+
+    const percent = totalTime > 0 ? parseFloat(((productiveTime / totalTime) * 100).toFixed(1)) : 0;
+
+    const rating =
+      percent >= 90 ? "🌟 Excellent" :
+        percent >= 70 ? "✅ Good" :
+          percent >= 50 ? "⚠️ Average" :
+            "❌ Needs Improvement";
+
+    setScore({ percent, rating });
+  }, [categorySummary]);  // ✅ Run this logic every time categorySummary updates
+
 
   // Custom label function for inside the pie slices
   const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, name }: any) => {
