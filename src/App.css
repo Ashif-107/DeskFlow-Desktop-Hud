@@ -126,3 +126,12 @@ body::-webkit-scrollbar {
   margin-top: -60px;
   overflow: visible !important;
 }
+
+
+.productivity-score-box {
+  font-size: 0.9rem;
+  margin-top: -70px;
+  color: white;
+  border-radius: 8px;
+  text-align: center;
+}

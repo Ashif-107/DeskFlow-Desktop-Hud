@@ -293,7 +293,16 @@ fn guess_category(title: &str, process: &str) -> String {
     } else if lowered.contains("chrome") || lowered.contains("brave") {
         if lowered.contains("youtube") || lowered.contains("netflix") {
             "Entertainment".to_string()
-        } else {
+        } else if lowered.contains("docs") || lowered.contains("ChatGPT") || lowered.contains("slack") {
+            "Work".to_string()
+        } else if lowered.contains("github") || lowered.contains("gitlab") || lowered.contains("bitbucket") {
+            "Work".to_string()
+        } else if lowered.contains("research") || lowered.contains("papers") || lowered.contains("arxiv") {
+            "Research".to_string()
+        } else if lowered.contains("education") || lowered.contains("learning") || lowered.contains("courses") {
+            "Education".to_string()
+        }
+        else {
             "Browsing".to_string()
         }
     } else if lowered.contains("game") {
@@ -392,6 +401,77 @@ fn get_category_summary() -> Result<HashMap<String, u64>, String> {
 }
 
 
+#[tauri::command]
+fn calculate_productivity_score() -> (HashMap<String, u64>, f64, String) {
+    use std::fs::File;
+    use std::io::{BufReader, BufRead};
+    use std::collections::HashMap;
+
+    let path = if cfg!(target_os = "windows") {
+        std::env::var("APPDATA").unwrap_or_else(|_| ".".to_string()) + "/deskflow/sessions.json"
+    } else {
+        std::env::var("HOME").unwrap_or_else(|_| ".".to_string()) + "/.deskflow/sessions.json"
+    };
+
+    let file = match File::open(path) {
+        Ok(f) => f,
+        Err(_) => return (HashMap::new(), 0.0, "No data".to_string()),
+    };
+
+    let reader = BufReader::new(file);
+    let lines = reader.lines();
+
+    let mut category_times: HashMap<String, u64> = HashMap::new();
+
+    for line in lines.flatten() {
+        if let Ok(session) = serde_json::from_str::<AppSession>(&line) {
+            let duration = session.end_time.saturating_sub(session.start_time);
+            *category_times.entry(session.category).or_insert(0) += duration;
+        }
+    }
+
+    let productive_categories = [
+        "Work", "Development", "Education", "Research", "Writing", "Tools", "System"
+    ];
+
+    let total_time: u64 = category_times.values().sum();
+    let productive_time: u64 = category_times.iter()
+        .filter(|(cat, _)| productive_categories.contains(&cat.as_str()))
+        .map(|(_, &sec)| sec)
+        .sum();
+
+    let percent = if total_time > 0 {
+        (productive_time as f64 / total_time as f64) * 100.0
+    } else {
+        0.0
+    };
+
+    let rating = if percent >= 90.0 {
+        "🌟 Excellent"
+    } else if percent >= 70.0 {
+        "✅ Good"
+    } else if percent >= 50.0 {
+        "⚠️ Average"
+    } else {
+        "❌ Needs Focus"
+    };
+
+    (category_times, percent, rating.to_string())
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -468,7 +548,8 @@ fn main() {
                     get_active_app,
                     get_all_visible_windows,
                     get_running_processes,
-                    get_category_summary
+                    get_category_summary,
+                    calculate_productivity_score
 
         ])
         .run(tauri::generate_context!())

@@ -5,7 +5,7 @@ import viewIcon from './assets/view.png';
 import hideIcon from './assets/hide.png';
 
 import {
-  PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer
 } from 'recharts';
 
 // Fixed color mapping for consistent colors per category
@@ -36,6 +36,9 @@ function App() {
 
   const [categorySummary, setCategorySummary] = useState<Record<string, number>>({});
   const [showModal, setShowModal] = useState(false);
+
+  const [score, setScore] = useState<{ percent: number; rating: string } | null>(null);
+
 
   const pieData = Object.entries(categorySummary)
     .filter(([category]) => category !== "Other")
@@ -77,9 +80,30 @@ function App() {
       }
     }, 10000);
 
+    // Every 30 sec: fetch productivity score
+    const scoreInterval = setInterval(async () => {
+      try {
+        const [_, percent, rating] = await invoke<[any, number, string]>("calculate_productivity_score");
+        setScore({ percent, rating });
+      } catch (err) {
+        console.error("Failed to fetch productivity score", err);
+      }
+    }, 5000); // every 5 seconds
+
+    // initial score fetch
+    (async () => {
+      try {
+        const [_, percent, rating] = await invoke<[any, number, string]>("calculate_productivity_score");
+        setScore({ percent, rating });
+      } catch (err) {
+        console.error("Initial productivity score failed", err);
+      }
+    })();
+
     return () => {
       clearInterval(interval);
       clearInterval(summaryInterval);
+      clearInterval(scoreInterval);
     };
   }, [])
 
@@ -111,33 +135,7 @@ function App() {
   };
 
   // Fixed custom tooltip
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      const { name, value } = payload[0];
-      const totalTime = pieData.reduce((sum, entry) => sum + entry.value, 0);
-      const percent = totalTime > 0 ? ((value / totalTime) * 100).toFixed(1) : "0";
 
-      return (
-        <div style={{
-          backgroundColor: "#fff",
-          color: "#000",
-          padding: "10px",
-          border: "1px solid #ccc",
-          borderRadius: "4px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-          fontSize: "14px",
-          zIndex: 1000,
-          pointerEvents: "none",
-          fontFamily: "Arial, sans-serif"
-        }}>
-          <div style={{ color: "#000", fontWeight: "bold" }}>{name}</div>
-          <div style={{ color: "#000" }}>Time: {formatDuration(value)}</div>
-          <div style={{ color: "#000" }}>Percentage: {percent}%</div>
-        </div>
-      );
-    }
-    return null;
-  };
 
   return (
     <div className="app-container">
@@ -232,6 +230,14 @@ function App() {
             </ResponsiveContainer>
           </div>
         </div>
+
+
+        {/* 🧠 Today's Productivity Score */}
+        {score && (
+          <div className="productivity-score-box">
+            🎯 Today's productivity: <strong>{score.percent?.toFixed?.(1) || "0.0"}%</strong> — <strong>{score.rating}</strong>
+          </div>
+        )}
 
 
         {/* 🚪 Popup Modal */}
