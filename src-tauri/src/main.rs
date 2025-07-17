@@ -4,6 +4,14 @@
 use tauri::{generate_handler, Manager, PhysicalPosition, PhysicalSize, WebviewWindow};
 #[cfg(target_os = "windows")] // gives us .hwnd()
 
+
+mod db;
+use db::{AppSession, init_db, save_session_to_db, get_category_summary_today};
+
+
+
+
+
 #[tauri::command]
 fn init_position(window: tauri::Window) {
     // place the window bottom‑right on the primary monitor
@@ -237,16 +245,6 @@ use once_cell::sync::Lazy;
 
 static LAST_APP: Lazy<Mutex<Option<(String, String, u64)>>> = Lazy::new(|| Mutex::new(None));
 
-
-#[derive(Serialize, Deserialize, Debug)]
-struct AppSession {
-    app_name: String,
-    window_title: String,
-    category: String,
-    start_time: u64,
-    end_time: u64,
-}
-
 use std::collections::HashMap;
 
 #[derive(Clone)]
@@ -256,31 +254,6 @@ struct RunningApp {
 }
 
 static RUNNING_APPS: Lazy<Mutex<HashMap<(String, String), RunningApp>>> = Lazy::new(|| Mutex::new(HashMap::new()));
-
-fn save_session(session: &AppSession) {
-   // Save to a system-appropriate directory instead of project root
-    let file_path = if cfg!(target_os = "windows") {
-        std::env::var("APPDATA").unwrap_or_else(|_| ".".to_string()) + "/deskflow/sessions.json"
-    } else {
-        std::env::var("HOME").unwrap_or_else(|_| ".".to_string()) + "/.deskflow/sessions.json"
-    };
-    
-    // Create directory if it doesn't exist
-    if let Some(parent) = std::path::Path::new(&file_path).parent() {
-        std::fs::create_dir_all(parent).ok();
-    }
-    
-    let file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(file_path);
-
-    if let Ok(mut file) = file {
-        let json = serde_json::to_string(session).unwrap();
-        use std::io::Write;
-        writeln!(file, "{}", json).unwrap();
-    }
-}
 
 
 fn guess_category(title: &str, process: &str) -> String {
@@ -371,37 +344,10 @@ fn get_running_processes() -> Vec<String> {
 
     processes
 }
-
 #[tauri::command]
 fn get_category_summary() -> Result<HashMap<String, u64>, String> {
-    use std::fs::File;
-    use std::io::{BufReader, BufRead};
-
-    let file_path = if cfg!(target_os = "windows") {
-        std::env::var("APPDATA").unwrap_or_else(|_| ".".to_string()) + "/deskflow/sessions.json"
-    } else {
-        std::env::var("HOME").unwrap_or_else(|_| ".".to_string()) + "/.deskflow/sessions.json"
-    };
-
-    let file = File::open(file_path).map_err(|e| e.to_string())?;
-    let reader = BufReader::new(file);
-
-    let mut summary: HashMap<String, u64> = HashMap::new();
-
-    for line in reader.lines() {
-        if let Ok(json) = line {
-            if let Ok(session) = serde_json::from_str::<AppSession>(&json) {
-                let duration = session.end_time.saturating_sub(session.start_time);
-                *summary.entry(session.category.clone()).or_insert(0) += duration;
-            }
-        }
-    }
-
-    Ok(summary)
+    get_category_summary_today().map_err(|e| e.to_string())
 }
-
-
-
 
 
 
@@ -429,6 +375,8 @@ fn get_category_summary() -> Result<HashMap<String, u64>, String> {
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
+            init_db().expect("Failed to initialize DB");
+            
             let window = app
                 .get_webview_window("main")
                 .expect("`main` window not found");
@@ -460,21 +408,35 @@ fn main() {
                 });
         }
 
+        let flush_interval = 5;
         // Clean up apps that disappeared
         apps.retain(|(title, process), app| {
-            if app.last_seen < now {
-                let session = AppSession {
-                    app_name: process.clone(),
-                    window_title: title.clone(),
-                    category: guess_category(title, process),
-                    start_time: app.start_time,
-                    end_time: app.last_seen,
-                };
-                save_session(&session);
-                false // remove from map
-            } else {
-                true
-            }
+            let duration = now.saturating_sub(app.start_time);
+            let inactive = app.last_seen < now;
+            let should_flush = duration >= flush_interval;
+
+            if inactive || should_flush {
+        let session = AppSession {
+            app_name: process.clone(),
+            window_title: title.clone(),
+            category: guess_category(title, process),
+            start_time: app.start_time,
+            end_time: if inactive { app.last_seen } else { now },
+        };
+
+        save_session_to_db(&session).unwrap();
+
+        if should_flush && !inactive {
+            // Update the start_time to now for the next flush
+            app.start_time = now;
+            app.last_seen = now;
+            return true; // keep tracking
+        }
+
+        false // stop tracking if app disappeared
+    } else {
+        true // still tracking, nothing to do yet
+    }
         });
 
         sleep(Duration::from_secs(1)).await;
