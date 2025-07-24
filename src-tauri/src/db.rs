@@ -106,32 +106,17 @@ pub fn get_category_summary_today() -> Result<std::collections::HashMap<String, 
     Ok(map)
 }
 
-pub fn calculate_and_store_yesterday_score() -> Result<()> {
-    let today = chrono::Local::now().naive_local().date();
-    let yesterday = today.pred(); // get the previous day
-    let yesterday_str = yesterday.format("%Y-%m-%d").to_string();
 
+// --------------- Calculate and store yesterday's productivity score --------------- //
+
+pub fn store_productivity_score(date: &str, score: f64) -> Result<()> {
     let conn = Connection::open(get_db_path())?;
-
-    // Get total tracked time for yesterday (sum of end_time - start_time)
-    let mut stmt = conn.prepare(
-        "SELECT SUM(end_time - start_time) as total FROM app_usage WHERE date = ?1",
+    
+    conn.execute(
+        "INSERT OR REPLACE INTO productivity_scores (date, score) VALUES (?1, ?2)",
+        params![date, score],
     )?;
-
-    let total_usage: Option<u64> = stmt.query_row([&yesterday_str], |row| row.get(0)).ok();
-
-    if let Some(seconds) = total_usage {
-        // Optional: Apply your custom formula to convert time to productivity score
-        let hours = seconds as f64 / 3600.0;
-        let score = (hours / 16.0) * 100.0; // assuming 16 hours max productivity time
-
-        // Store the score
-        conn.execute(
-            "INSERT OR REPLACE INTO productivity_scores (date, score) VALUES (?1, ?2)",
-            params![yesterday_str, score],
-        )?;
-    }
-
+    
     Ok(())
 }
 
@@ -168,8 +153,7 @@ pub fn clear_app_usage_if_new_day() -> Result<()> {
     let last_run = get_last_run_date();
 
     if last_run.as_deref() != Some(&today) {
-        // Save productivity score 
-        calculate_and_store_yesterday_score().expect("Failed to store yesterday's score");
+
 
 
         // Clear the table

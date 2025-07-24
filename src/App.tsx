@@ -113,6 +113,12 @@ function App() {
             "❌ Needs Improvement";
 
     setScore({ percent, rating });
+
+
+    // Store the score to database
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+    invoke('store_score', { date: today, score: percent })
+      .catch(err => console.error('Failed to store score:', err));
   }, [categorySummary]);  // ✅ Run this logic every time categorySummary updates
 
 

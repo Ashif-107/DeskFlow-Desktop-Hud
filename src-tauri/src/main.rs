@@ -353,8 +353,10 @@ fn get_category_summary() -> Result<HashMap<String, u64>, String> {
 
 
 
-
-
+#[tauri::command]
+fn store_score(date: String, score: f64) -> Result<(), String> {
+    db::store_productivity_score(&date, score).map_err(|e| e.to_string())
+}
 
 
 
@@ -381,6 +383,8 @@ fn main() {
 
             // ✅ Clear app_usage table if the date has changed
             clear_app_usage_if_new_day().expect("Failed to clear usage table on new day");
+
+            
             
             let window = app
                 .get_webview_window("main")
@@ -455,8 +459,8 @@ fn main() {
                     get_active_app,
                     get_all_visible_windows,
                     get_running_processes,
-                    get_category_summary
-                    
+                    get_category_summary,
+                    store_score                  
 
         ])
         .run(tauri::generate_context!())
