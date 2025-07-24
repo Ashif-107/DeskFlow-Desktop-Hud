@@ -6,7 +6,7 @@ use tauri::{generate_handler, Manager, PhysicalPosition, PhysicalSize, WebviewWi
 
 
 mod db;
-use db::{AppSession, init_db, save_session_to_db, get_category_summary_today};
+use db::{AppSession, init_db, save_session_to_db, get_category_summary_today,clear_app_usage_if_new_day};
 
 
 
@@ -375,15 +375,20 @@ fn get_category_summary() -> Result<HashMap<String, u64>, String> {
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
+            // ✅ Initialize the database
+
             init_db().expect("Failed to initialize DB");
+
+            // ✅ Clear app_usage table if the date has changed
+            clear_app_usage_if_new_day().expect("Failed to clear usage table on new day");
             
             let window = app
                 .get_webview_window("main")
                 .expect("`main` window not found");
             make_window_desktop_hud(&window);
 
-                let app_handle = app.handle();
-    tauri::async_runtime::spawn(async move {
+        let app_handle = app.handle();
+        tauri::async_runtime::spawn(async move {
         use tokio::time::{sleep, Duration};
         loop {
                 let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();

@@ -1,6 +1,6 @@
 use rusqlite::{params, Connection, Result};
 use serde::{Deserialize, Serialize};
-use std::fs;
+use std::fs::{self, File};
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -12,6 +12,11 @@ pub struct AppSession {
     pub start_time: u64,
     pub end_time: u64,
 }
+
+
+// Go to the following path to find the database file:
+//C:\Users\<YourUser>\AppData\Roaming\deskflow\usage_data.db
+
 
 fn get_db_path() -> PathBuf {
     if cfg!(target_os = "windows") {
@@ -99,4 +104,81 @@ pub fn get_category_summary_today() -> Result<std::collections::HashMap<String, 
     }
 
     Ok(map)
+}
+
+pub fn calculate_and_store_yesterday_score() -> Result<()> {
+    let today = chrono::Local::now().naive_local().date();
+    let yesterday = today.pred(); // get the previous day
+    let yesterday_str = yesterday.format("%Y-%m-%d").to_string();
+
+    let conn = Connection::open(get_db_path())?;
+
+    // Get total tracked time for yesterday (sum of end_time - start_time)
+    let mut stmt = conn.prepare(
+        "SELECT SUM(end_time - start_time) as total FROM app_usage WHERE date = ?1",
+    )?;
+
+    let total_usage: Option<u64> = stmt.query_row([&yesterday_str], |row| row.get(0)).ok();
+
+    if let Some(seconds) = total_usage {
+        // Optional: Apply your custom formula to convert time to productivity score
+        let hours = seconds as f64 / 3600.0;
+        let score = (hours / 16.0) * 100.0; // assuming 16 hours max productivity time
+
+        // Store the score
+        conn.execute(
+            "INSERT OR REPLACE INTO productivity_scores (date, score) VALUES (?1, ?2)",
+            params![yesterday_str, score],
+        )?;
+    }
+
+    Ok(())
+}
+
+
+use std::io::{Read, Write};
+
+fn get_last_run_file_path() -> PathBuf {
+    let mut path = get_db_path();
+    path.pop(); // remove usage_data.db
+    path.push("last_run.txt");
+    path
+}
+
+pub fn get_last_run_date() -> Option<String> {
+    let path = get_last_run_file_path();
+    if path.exists() {
+        let mut contents = String::new();
+        if File::open(path).unwrap().read_to_string(&mut contents).is_ok() {
+            return Some(contents.trim().to_string());
+        }
+    }
+    None
+}
+
+pub fn set_last_run_date(date: &str) {
+    let path = get_last_run_file_path();
+    if let Ok(mut file) = File::create(path) {
+        let _ = file.write_all(date.as_bytes());
+    }
+}
+
+pub fn clear_app_usage_if_new_day() -> Result<()> {
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let last_run = get_last_run_date();
+
+    if last_run.as_deref() != Some(&today) {
+        // Save productivity score 
+        calculate_and_store_yesterday_score().expect("Failed to store yesterday's score");
+
+
+        // Clear the table
+        let conn = Connection::open(get_db_path())?;
+        conn.execute("DELETE FROM app_usage", [])?;
+
+        // Update last run
+        set_last_run_date(&today);
+    }
+
+    Ok(())
 }
