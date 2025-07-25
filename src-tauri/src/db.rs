@@ -15,7 +15,7 @@ pub struct AppSession {
 
 
 // Go to the following path to find the database file:
-//C:\Users\<YourUser>\AppData\Roaming\deskflow\usage_data.db
+// C:\Users\<YourUser>\AppData\Roaming\deskflow\usage_data.db
 
 
 fn get_db_path() -> PathBuf {
