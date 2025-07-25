@@ -6,7 +6,7 @@ use tauri::{generate_handler, Manager, PhysicalPosition, PhysicalSize, WebviewWi
 
 
 mod db;
-use db::{AppSession, init_db, save_session_to_db, get_category_summary_today,clear_app_usage_if_new_day};
+use db::{AppSession, init_db, save_session_to_db, get_category_summary_today,clear_app_usage_if_new_day,get_last_five_scores};
 
 
 
@@ -460,7 +460,8 @@ fn main() {
                     get_all_visible_windows,
                     get_running_processes,
                     get_category_summary,
-                    store_score                  
+                    store_score,
+                     get_last_five_scores,     
 
         ])
         .run(tauri::generate_context!())

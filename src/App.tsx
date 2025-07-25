@@ -3,9 +3,12 @@ import "./App.css";
 import { useEffect, useState } from 'react';
 import viewIcon from './assets/view.png';
 import hideIcon from './assets/hide.png';
+import { parseISO, format } from 'date-fns';
 
 import {
-  PieChart, Pie, Cell, Tooltip, ResponsiveContainer
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend
+
 } from 'recharts';
 
 // Fixed color mapping for consistent colors per category
@@ -48,6 +51,8 @@ function App() {
 
   const [score, setScore] = useState<{ percent: number; rating: string } | null>(null);
 
+  const [scoreHistory, setScoreHistory] = useState<{ date: string; score: number }[]>([]);
+
 
   const pieData = Object.entries(categorySummary)
     .filter(([category]) => category !== "Other")
@@ -88,6 +93,11 @@ function App() {
         console.error("Failed to fetch summary", err);
       }
     }, 10000);
+
+
+    invoke<{ date: string; score: number }[]>("get_last_five_scores")
+      .then(setScoreHistory)
+      .catch(err => console.error("Error fetching score history", err));
 
     return () => {
       clearInterval(interval);
@@ -251,6 +261,31 @@ function App() {
         {score && (
           <div className="productivity-score-box">
             🎯 Today's productivity: <strong>{score.percent?.toFixed?.(1) || "0.0"}%</strong> — <strong>{score.rating}</strong>
+          </div>
+        )}
+
+        {/* 📈 Score History */}
+        {scoreHistory.length > 0 && (
+          <div className="score-history-box">
+            <h4>📅 Last 5 Days Productivity</h4>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={scoreHistory} margin={{ top: 10, right: 20, left: 0, bottom: 10 }} style={{ backgroundColor: 'transparent' }}>
+                <Tooltip
+                  contentStyle={{ backgroundColor: 'rgba(0, 0, 0, 1)', border: '1px solid #ccc' }}
+                  formatter={(value, name) => [`${value}%`, name]}
+                  labelFormatter={(label) => `Date: ${label}`}
+                />
+                <XAxis
+                  dataKey="date"
+                  tickFormatter={(str) => {
+                    const date = parseISO(str);
+                    return format(date, 'dd MMM'); // e.g. "23 Jul"
+                  }}
+                />
+                <Legend />
+                <Bar dataKey="score" fill="#5E40BE" name="Productivity %" />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         )}
 

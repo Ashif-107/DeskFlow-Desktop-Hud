@@ -166,3 +166,44 @@ pub fn clear_app_usage_if_new_day() -> Result<()> {
 
     Ok(())
 }
+
+
+// --------------- Get productivity score for last five days --------------- //
+
+#[derive(Serialize)]
+pub struct ScoreRecord {
+    pub date: String,
+    pub score: f64,
+}
+
+#[tauri::command]
+pub fn get_last_five_scores() -> Result<Vec<ScoreRecord>, String> {
+    use rusqlite::Connection;
+
+    let conn = Connection::open(get_db_path()).map_err(|e| e.to_string())?;
+
+    let mut stmt = conn
+        .prepare("SELECT date, score FROM productivity_scores ORDER BY date DESC LIMIT 5")
+        .map_err(|e| e.to_string())?;
+
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(ScoreRecord {
+                date: row.get(0)?,
+                score: row.get(1)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+
+    let mut records = Vec::new();
+    for row in rows {
+        if let Ok(record) = row {
+            records.push(record);
+        }
+    }
+
+    // Optional: Sort by ascending date (oldest to newest)
+    records.sort_by(|a, b| a.date.cmp(&b.date));
+
+    Ok(records)
+}
