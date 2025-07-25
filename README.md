@@ -58,16 +58,16 @@ It's designed to be a **minimal, low-resource desktop app** that blends into you
 
 ### 4. 📆 Calendar Streak View - In developement 
 - Visual calendar with colored streaks:
-  - ✅ Green = Productive
-  - ⚠️ Yellow = Neutral
-  - ❌ Red = Unproductive
-- Click on any date to see:
-  - Time spent per category
-  - Detailed session logs
 
 ---
 
-## 🚀 How It Works
+## 📸 Screenshots
+<img width="432" height="409" alt="image" src="https://github.com/user-attachments/assets/c6cb55b7-9e10-4ddb-8667-06ba55299357" />
+<img width="439" height="409" alt="image" src="https://github.com/user-attachments/assets/bdad03ce-9848-4fe0-9bba-fedd4db24122" />
+
+
+
+---
 
 ### 🧠 Workflow
 
@@ -136,10 +136,6 @@ npm run tauri dev
 - 🤖 AI insights: *“You’ve watched too much YouTube today 😅”*
 - 🌙 Dark/Light mode toggle
 
----
-
-## 📸 Screenshots
-
 
 ---
 
@@ -149,4 +145,4 @@ This project is licensed under the **MIT License**.
 
 ---
 
-## 🙌 Made with ❤️ by [Ashif](https://github.com/your-username)
+## 🙌 Made with ❤️ by [Ashif](https://github.com/Ashif-107)
