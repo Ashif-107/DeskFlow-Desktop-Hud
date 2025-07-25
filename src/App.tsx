@@ -7,7 +7,7 @@ import { parseISO, format } from 'date-fns';
 
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend
+  BarChart, Bar, XAxis, Legend
 
 } from 'recharts';
 
